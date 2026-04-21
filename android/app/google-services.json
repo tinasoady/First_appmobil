@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "687222618202",
+    "project_id": "gostudy-bf765",
+    "storage_bucket": "gostudy-bf765.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:687222618202:android:8071f9747d80676f504063",
+        "android_client_info": {
+          "package_name": "com.example.app_gostudy"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDTUcttKogACM0E3pcJcOZ8y9gw-Wz_Vfc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
