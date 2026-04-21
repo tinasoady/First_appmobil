@@ -1,10 +1,15 @@
-# TODO: Style Buttons Task - COMPLETED
+# Previous task: Ride success navigation - COMPLETE
 
-## Plan Steps:
-- [x] Step 1: Create TODO.md 
-- [x] Step 2: Fix and style ElevatedButton in login_screen.dart with colored gradient background
-- [x] Step 3: Style ElevatedButton in register_screen.dart with matching colored gradient background
-- [x] Step 4: Test changes with `flutter run`
-- [x] Step 5: Complete task
+# New Task: Display recent rides on home page (Accueil tab), sorted newest first
 
-**All steps completed ✅** Buttons now have blue background, white bold text, elevation/shadow, rounded corners (12px radius) in both login_screen.dart and register_screen.dart. Errors fixed, styling consistent and modern.
+## Steps:
+- [x] 1. firestore_service.dart: Add getRecentRidesStream() with orderBy('departureTime', descending: true).
+
+- [x] 2. home_screen.dart: Import service/ride, replace Accueil static text with StreamBuilder(getRecentRidesStream()), compact ride cards linking to service.
+
+- [x] 3. Test: flutter run → home Accueil → recent rides top newest.
+
+
+## Status: Steps 1-2 complete. Ready for testing.
+
+

@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../services/firestore_service.dart';
+import '../models/ride.dart';
+import 'service_screen.dart';
+import 'notification_screen.dart';
+import 'profil_screen.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -10,6 +15,7 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   int _currentIndex = 0;
+  final List<String> titles = ['Accueil', 'Services', 'Notifications', 'Profil'];
   final user = FirebaseAuth.instance.currentUser;
 
   void _logout() async {
@@ -18,64 +24,12 @@ class _HomePageState extends State<HomePage> {
       Navigator.of(context).pushReplacementNamed('/login');
     }
   }
-
   @override
   Widget build(BuildContext context) {
-    final List<Widget> tabContents = [
-      // Home
-      Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text('Bienvenue, ${user?.email ?? 'Utilisateur'}!', style: Theme.of(context).textTheme.headlineSmall),
-            const SizedBox(height: 20),
-            const Text('Écran d\'accueil'),
-          ],
-        ),
-      ),
-      // Services
-      const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.build, size: 64, color: Colors.blue),
-            SizedBox(height: 16),
-            Text('Services', style: TextStyle(fontSize: 24)),
-            Text('Liste des services disponibles'),
-          ],
-        ),
-      ),
-      // Profil
-     
-      // Notifications
-      const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.notifications, size: 64, color: Colors.orange),
-            SizedBox(height: 16),
-            Text('Notifications', style: TextStyle(fontSize: 24)),
-            Text('Aucune notification pour le moment'),
-          ],
-        ),
-      ),
-
-       Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.person, size: 64, color: Colors.green),
-            const SizedBox(height: 16),
-            const Text('Profil', style: TextStyle(fontSize: 24)),
-            Text('Email: ${user?.email ?? 'N/A'}'),
-          ],
-        ),
-      ),
-    ];
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Accueil'),
+        title: Text(titles[_currentIndex]),
         actions: [
           IconButton(
             icon: const Icon(Icons.logout),
@@ -85,8 +39,66 @@ class _HomePageState extends State<HomePage> {
       ),
       body: IndexedStack(
         index: _currentIndex,
-        children: tabContents,
+        children: [
+          StreamBuilder<List<Ride>>(
+            stream: FirestoreService().getRecentRidesStream(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                return const Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.car_rental_outlined, size: 64, color: Colors.grey),
+                      SizedBox(height: 16),
+                      Text('Aucun trajet récent disponible'),
+                      Text('Les trajets apparaîtront ici', style: TextStyle(color: Colors.grey)),
+                    ],
+                  ),
+                );
+              }
+              final rides = snapshot.data!;
+              return ListView.builder(
+                padding: const EdgeInsets.all(16),
+                itemCount: rides.length,
+                itemBuilder: (context, index) {
+                  final ride = rides[index];
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    child: ListTile(
+                      leading: CircleAvatar(
+                        backgroundColor: Colors.blue.shade100,
+                        child: const Icon(Icons.car_rental, color: Colors.blue),
+                      ),
+                      title: Text('${ride.originUniv} → ${ride.destUniv}'),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('${ride.departurePoint} • ${ride.departureTime.toString().substring(11, 16)}'),
+                          Text('${ride.seats} places • ${ride.price.toStringAsFixed(0)} Ar'),
+                        ],
+                      ),
+                      trailing: ElevatedButton(
+                        onPressed: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const ServiceScreen()),
+                        ),
+                        child: const Text('Voir'),
+                      ),
+                    ),
+                  );
+                },
+              );
+            },
+          ),
+          const ServiceScreen(),
+          const NotificationScreen(),
+          const ProfilScreen(),
+        ],
       ),
+      
       bottomNavigationBar: BottomNavigationBar(
         type: BottomNavigationBarType.fixed,
         currentIndex: _currentIndex,
@@ -99,8 +111,8 @@ class _HomePageState extends State<HomePage> {
             label: 'Accueil',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.build),
-            label: 'Services',
+            icon: Icon(Icons.car_rental),
+            label: 'Covoiturage',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.notifications),
