@@ -100,4 +100,3 @@ flutter run
 
 ---
 
-Si tu veux, je peux aussi ajouter une section “Auteurs / Contributeurs” et un lien vers la maquette/cahier de charge selon ton document.
