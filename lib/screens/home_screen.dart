@@ -40,6 +40,7 @@ class _HomePageState extends State<HomePage> {
       body: IndexedStack(
         index: _currentIndex,
         children: [
+          // Accueil
           StreamBuilder<List<Ride>>(
             stream: FirestoreService().getRecentRidesStream(),
             builder: (context, snapshot) {
@@ -59,6 +60,7 @@ class _HomePageState extends State<HomePage> {
                   ),
                 );
               }
+
               final rides = snapshot.data!;
               return ListView.builder(
                 padding: const EdgeInsets.all(16),
@@ -81,10 +83,7 @@ class _HomePageState extends State<HomePage> {
                         ],
                       ),
                       trailing: ElevatedButton(
-                        onPressed: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const ServiceScreen()),
-                        ),
+                        onPressed: () => setState(() => _currentIndex = 1),
                         child: const Text('Voir'),
                       ),
                     ),
@@ -93,8 +92,14 @@ class _HomePageState extends State<HomePage> {
               );
             },
           ),
+
+          // Services
           const ServiceScreen(),
+
+          // Notifications
           const NotificationScreen(),
+
+          // Profil
           const ProfilScreen(),
         ],
       ),

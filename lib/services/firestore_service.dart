@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart'; // <-- AJOUTÉ pour récupérer l'ID de l'utilisateur connecté
 import '../models/ride.dart';
 
 class FirestoreService {
@@ -8,6 +9,7 @@ class FirestoreService {
 
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final String _ridesCollection = 'rides';
+  final String _requestsCollection = 'ride_requests'; // <-- AJOUTÉ : Nouvelle collection pour les demandes
 
   // Stream all/open rides (oldest first)
   Stream<List<Ride>> getRidesStream() {
@@ -63,6 +65,27 @@ class FirestoreService {
     await _firestore.collection(_ridesCollection).doc(rideId).delete();
   }
 
+  // ==========================================
+  // NOUVELLE FONCTION : ENVOYER UNE DEMANDE
+  // ==========================================
+  Future<void> sendRideRequest(String rideId, String driverId) async {
+    // 1. Récupérer l'ID du passager actuellement connecté
+    final String? passengerId = FirebaseAuth.instance.currentUser?.uid;
+
+    if (passengerId == null) {
+      throw Exception("Utilisateur non connecté. Impossible de rejoindre le trajet.");
+    }
+
+    // 2. Ajouter la demande dans la collection 'ride_requests'
+    await _firestore.collection(_requestsCollection).add({
+      'rideId': rideId,
+      'passengerId': passengerId,
+      'driverId': driverId,
+      'status': 'pending', // Statut initial : en attente ('pending', 'accepted', 'rejected')
+      'timestamp': FieldValue.serverTimestamp(),
+    });
+  }
+
   // Add sample demo rides if collection empty (for testing)
   Future<void> addDemoRides() async {
     final snapshot = await _firestore.collection(_ridesCollection).limit(1).get();
@@ -105,5 +128,42 @@ class FirestoreService {
       }
     }
   }
-}
 
+  // =========================================================================
+  // ÉCOUTER LES NOTIFICATIONS (DEMANDES REÇUES EN TANT QUE CONDUCTEUR)
+  // =========================================================================
+  Stream<List<Map<String, dynamic>>> getIncomingRequestsStream() {
+    final String? userId = FirebaseAuth.instance.currentUser?.uid;
+    
+    if (userId == null) {
+      return Stream.value([]);
+    }
+
+    // On récupère les demandes où l'utilisateur connecté est le conducteur (driverId)
+    return _firestore
+        .collection(_requestsCollection)
+        .where('driverId', isEqualTo: userId)
+        .orderBy('timestamp', descending: true)
+        .snapshots()
+        .map((snapshot) => snapshot.docs.map((doc) {
+              final data = doc.data();
+              return {
+                'id': doc.id, // On garde l'ID du document pour pouvoir l'accepter/refuser
+                ...data,
+              };
+            }).toList());
+  }
+
+  // =========================================================================
+  // ACCEPTER OU REFUSER UNE DEMANDE
+  // =========================================================================
+  Future<void> updateRequestStatus(String requestId, String newStatus) async {
+    await _firestore
+        .collection(_requestsCollection)
+        .doc(requestId)
+        .update({
+      'status': newStatus, // 'accepted' ou 'rejected'
+    });
+  }
+
+}

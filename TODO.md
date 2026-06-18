@@ -1,15 +1,14 @@
-# Previous task: Ride success navigation - COMPLETE
+# TODO - Notifications (FCM + Local)
 
-# New Task: Display recent rides on home page (Accueil tab), sorted newest first
+- [x] Mettre à jour `lib/services/notification_service.dart` :
+  - [x] Nettoyer la structure (suppression commentaire parasite)
+  - [x] Gérer `message.notification == null` en fallback sur `message.data`
+  - [x] Ajouter gestion du clic sur notification (`onMessageOpenedApp`)
+  - [x] Initialiser local notifications proprement (iOS/Android) + settings & callbacks compatibles v17
+  - [x] S’assurer channel Android cohérent et icône valide
 
-## Steps:
-- [x] 1. firestore_service.dart: Add getRecentRidesStream() with orderBy('departureTime', descending: true).
+- [ ] Mettre à jour `lib/main.dart` : initialisation propre du service
 
-- [x] 2. home_screen.dart: Import service/ride, replace Accueil static text with StreamBuilder(getRecentRidesStream()), compact ride cards linking to service.
-
-- [x] 3. Test: flutter run → home Accueil → recent rides top newest.
-
-
-## Status: Steps 1-2 complete. Ready for testing.
+- [ ] Lancer : `flutter clean && flutter pub get && flutter analyze`
 
 

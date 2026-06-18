@@ -17,6 +17,9 @@ class _LoginPageState extends State<LoginPage> {
   bool _isPasswordHidden = true;
   bool _isLoading = false;
 
+  // =========================================================================
+  // LOGIQUE DE CONNEXION ÉTABLIE
+  // =========================================================================
   Future<void> _login() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -48,6 +51,91 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
+  // =========================================================================
+  // LOGIQUE DE RÉINITIALISATION DU MOT DE PASSE (SOUS LE CAPOT)
+  // =========================================================================
+  void _showForgotPasswordDialog() {
+    // On récupère l'email éventuellement déjà saisi pour le pré-remplir
+    final dialogEmailController = TextEditingController(text: _emailController.text.trim());
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text('Mot de passe oublié ?'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Entrez votre adresse email. Firebase vous enverra un lien sécurisé pour configurer un nouveau mot de passe.',
+                style: TextStyle(fontSize: 14, color: Colors.black87),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: dialogEmailController,
+                keyboardType: TextInputType.emailAddress,
+                decoration: const InputDecoration(
+                  labelText: 'Votre adresse Email',
+                  prefixIcon: Icon(Icons.email),
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Annuler', style: TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              onPressed: () async {
+                final email = dialogEmailController.text.trim();
+                if (email.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Veuillez entrer un email valide')),
+                  );
+                  return;
+                }
+
+                try {
+                  // Appel à l'infrastructure Firebase Authentication
+                  await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+                  
+                  if (context.mounted) {
+                    Navigator.pop(context); // Ferme la boîte de dialogue
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Email de réinitialisation envoyé ! Vérifiez vos spams si besoin.'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                  }
+                } on FirebaseAuthException catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(e.message ?? 'Une erreur est survenue.'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                }
+              },
+              child: const Text('Envoyer', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   void dispose() {
     _emailController.dispose();
@@ -58,7 +146,7 @@ class _LoginPageState extends State<LoginPage> {
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
-final double logoSize = screenWidth * 0.5;
+    final double logoSize = screenWidth * 0.5;
 
     return Scaffold(
       body: Center(
@@ -85,7 +173,7 @@ final double logoSize = screenWidth * 0.5;
                     ),
                   ),
                 ),
-                const SizedBox(height: 24), // Espacement entre le logo et le titre
+                const SizedBox(height: 24),
 
                 const Text(
                   'Connexion',
@@ -124,7 +212,7 @@ final double logoSize = screenWidth * 0.5;
                   obscureText: _isPasswordHidden,
                   decoration: InputDecoration(
                     labelText: 'Mot de passe',
-                    border: OutlineInputBorder(),
+                    border: const OutlineInputBorder(),
                     prefixIcon: const Icon(Icons.lock),
                     isDense: true,
                     suffixIcon: IconButton(
@@ -148,7 +236,27 @@ final double logoSize = screenWidth * 0.5;
                     return null;
                   },
                 ),
-                const SizedBox(height: 24),
+                
+                // BOUTON MOT DE PASSE OUBLIÉ ALIGNÉ À DROITE
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: _showForgotPasswordDialog,
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    child: const Text(
+                      'Mot de passe oublié ?',
+                      style: TextStyle(
+                        color: Colors.blue, 
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
 
                 // Bouton connexion
                 SizedBox(
@@ -163,14 +271,14 @@ final double logoSize = screenWidth * 0.5;
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      padding: const EdgeInsets.symmetric(vertical: 12), // Augmentation de la hauteur du bouton
+                      padding: const EdgeInsets.symmetric(vertical: 12),
                     ),
                     onPressed: _isLoading ? null : _login,
                     child: _isLoading
-                        ? const SizedBox( 
+                        ? const SizedBox(
                             width: 24,
                             height: 24,
-                            child: CircularProgressIndicator( 
+                            child: CircularProgressIndicator(
                               strokeWidth: 3,
                               color: Colors.white,
                             ),
@@ -202,4 +310,3 @@ final double logoSize = screenWidth * 0.5;
     );
   }
 }
-

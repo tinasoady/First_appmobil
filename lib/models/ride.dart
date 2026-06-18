@@ -66,7 +66,7 @@ class Ride {
     };
     final origin = coords[originUniv] ?? '-15.358,46.318';
     final dest = coords[destUniv] ?? '-15.350,46.320';
-    return 'https://www.google.com/maps/dir/?api=1&origin=$departurePoint+$originUniv&destination=$destUniv&travelmode=driving';
+    return 'https://www.google.com/maps/dir/?api=1&origin=${Uri.encodeComponent('$departurePoint $origin')}&destination=${Uri.encodeComponent(dest)}&travelmode=driving';
   }
 }
 

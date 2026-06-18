@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../models/ride.dart';
 import '../services/firestore_service.dart';
+import '../services/notification_service.dart';
 import 'offer_ride_screen.dart';
 
 class ServiceScreen extends StatefulWidget {
@@ -16,6 +15,7 @@ class ServiceScreen extends StatefulWidget {
 
 class _ServiceScreenState extends State<ServiceScreen> {
   final _firestoreService = FirestoreService();
+  final _notificationService = NotificationService();
   final _searchController = TextEditingController();
   String? _filterUniv;
 
@@ -31,7 +31,13 @@ class _ServiceScreenState extends State<ServiceScreen> {
         }
       });
     }
-    _firestoreService.addDemoRides(); // Ensure demos
+    _firestoreService.addDemoRides();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   void _proposeRide() {
@@ -74,7 +80,8 @@ class _ServiceScreenState extends State<ServiceScreen> {
             ],
           ),
         ),
-        // Buttons
+        
+        // Buttons Action
         Padding(
           padding: const EdgeInsets.all(16),
           child: Row(
@@ -90,43 +97,80 @@ class _ServiceScreenState extends State<ServiceScreen> {
               const SizedBox(width: 12),
               Expanded(
                 child: ElevatedButton.icon(
-                  onPressed: () => _filterUniv = null, // TODO: Search screen
-                  icon: const Icon(Icons.search),
-                  label: const Text('Chercher'),
+                  onPressed: () {
+                    // CORRECTION : Utilisation de setState pour réinitialiser le filtre et rafraîchir le flux
+                    setState(() {
+                      _filterUniv = null;
+                      _searchController.clear();
+                    });
+                  },
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Tout afficher'),
                   style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
                 ),
               ),
             ],
           ),
         ),
-        // Search/Filter
+        
+        // Search/Filter Input
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: TextFormField(
             controller: _searchController,
             decoration: InputDecoration(
-              labelText: 'Filtrer par université',
+              labelText: 'Filtrer par université (Ex: ISSTM)',
               prefixIcon: const Icon(Icons.filter_list),
-              suffixIcon: IconButton(icon: const Icon(Icons.clear), onPressed: () => _searchController.clear()),
+              suffixIcon: IconButton(
+                icon: const Icon(Icons.clear), 
+                onPressed: () {
+                  setState(() {
+                    _searchController.clear();
+                    _filterUniv = null;
+                  });
+                }
+              ),
               border: const OutlineInputBorder(),
             ),
-            onChanged: (value) => setState(() => _filterUniv = value.isEmpty ? null : value),
+            onChanged: (value) => setState(() => _filterUniv = value.trim().isEmpty ? null : value.trim()),
           ),
         ),
         const SizedBox(height: 16),
-        // Rides List
+        
+        // Rides List Stream
         Expanded(
           child: StreamBuilder<List<Ride>>(
             stream: _filterUniv != null
                 ? _firestoreService.getFilteredRidesStream(originUniv: _filterUniv)
                 : _firestoreService.getRidesStream(),
             builder: (context, snapshot) {
+              // DIAGNOSTIC TECHNIQUE : Capture l'erreur exacte renvoyée par le moteur Firestore
+              if (snapshot.hasError) {
+                return Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Text(
+                      'Erreur système Firestore :\n${snapshot.error}',
+                      style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                );
+              }
+
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator());
               }
+
               if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                return const Center(child: Text('Aucun trajet disponible'));
+                return const Center(
+                  child: Text(
+                    'Aucun trajet disponible.\nAssurez-vous que les données existent en base.',
+                    textAlign: TextAlign.center,
+                  ),
+                );
               }
+
               final rides = snapshot.data!;
               return ListView.builder(
                 padding: const EdgeInsets.all(16),
@@ -144,7 +188,12 @@ class _ServiceScreenState extends State<ServiceScreen> {
                             children: [
                               const Icon(Icons.school, color: Colors.green),
                               const SizedBox(width: 8),
-                              Expanded(child: Text('${ride.originUniv} → ${ride.destUniv}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18))),
+                              Expanded(
+                                child: Text(
+                                  '${ride.originUniv} → ${ride.destUniv}', 
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)
+                                )
+                              ),
                               Text('${ride.price.toStringAsFixed(0)} Ar', style: const TextStyle(fontSize: 18, color: Colors.green)),
                             ],
                           ),
@@ -152,19 +201,22 @@ class _ServiceScreenState extends State<ServiceScreen> {
                           Row(
                             children: [
                               const Icon(Icons.location_on, size: 16),
+                              const SizedBox(width: 4),
                               Expanded(child: Text(ride.departurePoint)),
                             ],
                           ),
                           Row(
                             children: [
                               const Icon(Icons.access_time, size: 16),
+                              const SizedBox(width: 4),
                               Expanded(child: Text(ride.departureTime.toString().substring(0, 16))),
                             ],
                           ),
                           Row(
                             children: [
                               const Icon(Icons.event_seat, size: 16),
-                              Text('${ride.seats} places'),
+                              const SizedBox(width: 4),
+                              Text('${ride.seats} places disponibles'),
                             ],
                           ),
                           const SizedBox(height: 12),
@@ -179,8 +231,33 @@ class _ServiceScreenState extends State<ServiceScreen> {
                               ),
                               const SizedBox(width: 8),
                               ElevatedButton.icon(
-                                onPressed: () {
-                                  // TODO: Join ride
+                                onPressed: () async {
+                                  try {
+                                    await _firestoreService.sendRideRequest(ride.id, ride.driverId);
+                                    
+                                    await _notificationService.showLocalNotification(
+                                      title: 'Demande envoyée ! 🚗',
+                                      body: 'Votre demande pour le trajet vers ${ride.destUniv} a bien été transmise.',
+                                    );
+
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(
+                                          content: Text('Demande envoyée au conducteur avec succès !'),
+                                          backgroundColor: Colors.green,
+                                        ),
+                                      );
+                                    }
+                                  } catch (e) {
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text('Erreur : ${e.toString()}'),
+                                          backgroundColor: Colors.red,
+                                        ),
+                                      );
+                                    }
+                                  }
                                 },
                                 icon: const Icon(Icons.thumb_up, size: 16),
                                 label: const Text('Rejoindre'),
@@ -201,4 +278,3 @@ class _ServiceScreenState extends State<ServiceScreen> {
     );
   }
 }
-
