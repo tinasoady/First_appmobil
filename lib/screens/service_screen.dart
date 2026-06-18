@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart'; // Importé pour récupérer l'ID utilisateur unique
 import '../models/ride.dart';
 import '../services/firestore_service.dart';
 import '../services/notification_service.dart';
 import 'offer_ride_screen.dart';
+import '../widgets/profile_avatar.dart';
 
 class ServiceScreen extends StatefulWidget {
   final bool showSuccess;
@@ -56,11 +59,16 @@ class _ServiceScreenState extends State<ServiceScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Récupération dynamique de l'ID de l'utilisateur connecté
+    // (Si pas encore de système de login actif, remplace par une String fixe pour tester, ex: "test_user_123")
+    final String? userId = FirebaseAuth.instance.currentUser?.uid;
+
     return Column(
       children: [
-        // Header
+        // En-tête (Header) avec le Logo de GoStudy et l'Avatar de profil
         Container(
-          padding: const EdgeInsets.all(16),
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
           decoration: BoxDecoration(
             gradient: LinearGradient(
               colors: [Colors.blue.shade400, Colors.blue.shade600],
@@ -68,20 +76,66 @@ class _ServiceScreenState extends State<ServiceScreen> {
               end: Alignment.bottomRight,
             ),
           ),
-          child: const Column(
+          child: Column(
             children: [
-              Icon(Icons.car_rental, size: 64, color: Colors.white),
-              SizedBox(height: 8),
-              Text(
-                'Covoiturage Mahajanga - ISSTM & Univ',
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
+              // Ligne supérieure : Logo à gauche, Profil à droite
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Image.asset(
+                    'assets/images/logoGostudy.png', 
+                    height: 60, // Ajusté légèrement pour s'aligner joliment avec l'avatar
+                    fit: BoxFit.contain,
+                  ),
+                  
+                  // Section Avatar connectée à Firestore
+                  if (userId != null)
+                    FutureBuilder<DocumentSnapshot>(
+                      future: FirebaseFirestore.instance.collection('utilisateur').doc(userId).get(),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.waiting) {
+                          return const CircleAvatar(
+                            radius: 22,
+                            backgroundColor: Colors.white24,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          );
+                        }
+
+                        String? photoUrl;
+                        if (snapshot.hasData && snapshot.data!.exists) {
+                          final data = snapshot.data!.data() as Map<String, dynamic>?;
+                          photoUrl = data?['photoUrl'];
+                        }
+
+                        // On applique un léger scale pour l'intégrer discrètement dans la barre supérieure
+                        return Transform.scale(
+                          scale: 0.85,
+                          child: ProfileAvatar(
+                            userId: userId,
+                            initialPhotoUrl: photoUrl,
+                          ),
+                        );
+                      },
+                    )
+                  else
+                    // Fallback visuel si l'utilisateur n'est pas détecté/connecté
+                    const CircleAvatar(
+                      radius: 22,
+                      backgroundColor: Colors.white24,
+                      child: Icon(Icons.person, color: Colors.white),
+                    ),
+                ],
               ),
-              Text('Proposez ou trouvez un trajet', style: TextStyle(fontSize: 16, color: Colors.white70)),
+              const SizedBox(height: 16),
+              const Text(
+                'Proposez ou trouvez un trajet', 
+                style: TextStyle(fontSize: 16, color: Colors.white70, fontWeight: FontWeight.w500),
+              ),
             ],
           ),
         ),
         
-        // Buttons Action
+        // Boutons d'action (Proposer / Tout afficher)
         Padding(
           padding: const EdgeInsets.all(16),
           child: Row(
@@ -98,7 +152,6 @@ class _ServiceScreenState extends State<ServiceScreen> {
               Expanded(
                 child: ElevatedButton.icon(
                   onPressed: () {
-                    // CORRECTION : Utilisation de setState pour réinitialiser le filtre et rafraîchir le flux
                     setState(() {
                       _filterUniv = null;
                       _searchController.clear();
@@ -113,7 +166,7 @@ class _ServiceScreenState extends State<ServiceScreen> {
           ),
         ),
         
-        // Search/Filter Input
+        // Champ de saisie pour la recherche / filtrage
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: TextFormField(
@@ -137,14 +190,11 @@ class _ServiceScreenState extends State<ServiceScreen> {
         ),
         const SizedBox(height: 16),
         
-        // Rides List Stream
+        // Liste des trajets alimentée par Firestore et filtrée localement
         Expanded(
           child: StreamBuilder<List<Ride>>(
-            stream: _filterUniv != null
-                ? _firestoreService.getFilteredRidesStream(originUniv: _filterUniv)
-                : _firestoreService.getRidesStream(),
+            stream: _firestoreService.getRidesStream(),
             builder: (context, snapshot) {
-              // DIAGNOSTIC TECHNIQUE : Capture l'erreur exacte renvoyée par le moteur Firestore
               if (snapshot.hasError) {
                 return Center(
                   child: Padding(
@@ -165,13 +215,37 @@ class _ServiceScreenState extends State<ServiceScreen> {
               if (!snapshot.hasData || snapshot.data!.isEmpty) {
                 return const Center(
                   child: Text(
-                    'Aucun trajet disponible.\nAssurez-vous que les données existent en base.',
+                    'Aucun trajet disponible en base.',
                     textAlign: TextAlign.center,
                   ),
                 );
               }
 
-              final rides = snapshot.data!;
+              final allRides = snapshot.data!;
+              
+              final rides = allRides.where((ride) {
+                if (_filterUniv == null || _filterUniv!.isEmpty) return true;
+                
+                final query = _filterUniv!.toLowerCase();
+                final origin = ride.originUniv.toLowerCase();
+                final dest = ride.destUniv.toLowerCase();
+                
+                return origin.contains(query) || dest.contains(query);
+              }).toList();
+
+              if (rides.isEmpty) {
+                return const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(16.0),
+                    child: Text(
+                      'Aucun trajet ne correspond à votre recherche.',
+                      style: TextStyle(fontSize: 16, color: Colors.grey),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                );
+              }
+
               return ListView.builder(
                 padding: const EdgeInsets.all(16),
                 itemCount: rides.length,
@@ -182,7 +256,7 @@ class _ServiceScreenState extends State<ServiceScreen> {
                     child: Padding(
                       padding: const EdgeInsets.all(16),
                       child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                        crossAxisAlignment : CrossAxisAlignment.start,
                         children: [
                           Row(
                             children: [
