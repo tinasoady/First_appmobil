@@ -144,6 +144,9 @@ flutter run
 
 - Projet : **app_gostudy** (à compléter si besoin)
 
+- Developper TINASOADY Judès Edi...
+Etudiant ISSTM 2026
+
 ---
 
 
