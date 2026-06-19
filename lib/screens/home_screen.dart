@@ -33,7 +33,7 @@ class _HomePageState extends State<HomePage> {
         actions: [
           IconButton(
             icon: const Icon(Icons.logout),
-            onPressed: _logout,
+            onPressed: () => _afficherDialogueDeconnexion(context),
           ),
         ],
       ),
@@ -132,6 +132,53 @@ class _HomePageState extends State<HomePage> {
       ),
     );
   }
+  // Pense à importer Firebase Auth en haut si ce n'est pas fait :
+// import 'package:firebase_auth/firebase_auth.dart';
+
+void _afficherDialogueDeconnexion(BuildContext context) {
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (BuildContext dialogContext) {
+      return AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.red),
+            SizedBox(width: 10),
+            Text('Déconnexion'),
+          ],
+        ),
+        content: const Text('Êtes-vous sûr de vouloir vous déconnecter de GoStudy ?'),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(dialogContext).pop();
+            },
+            child: const Text(
+              'Annuler',
+              style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold),
+            ),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.of(dialogContext).pop(); // Ferme le dialogue
+              await FirebaseAuth.instance.signOut(); // Déconnexion
+              
+              if (!mounted) return;
+              if (context.mounted) {
+                Navigator.of(context).pushReplacementNamed('/login'); // Redirection
+              }
+            },
+            child: const Text(
+              'Se déconnecter',
+              style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      );
+    },
+  );
+}
 }
 
 

@@ -1,12 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart'; // Importé pour récupérer l'ID utilisateur unique
 import '../models/ride.dart';
 import '../services/firestore_service.dart';
 import '../services/notification_service.dart';
 import 'offer_ride_screen.dart';
-import '../widgets/profile_avatar.dart';
 
 class ServiceScreen extends StatefulWidget {
   final bool showSuccess;
@@ -59,13 +56,9 @@ class _ServiceScreenState extends State<ServiceScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Récupération dynamique de l'ID de l'utilisateur connecté
-    // (Si pas encore de système de login actif, remplace par une String fixe pour tester, ex: "test_user_123")
-    final String? userId = FirebaseAuth.instance.currentUser?.uid;
-
     return Column(
       children: [
-        // En-tête (Header) avec le Logo de GoStudy et l'Avatar de profil
+        // En-tête (Header) avec uniquement le Logo de GoStudy
         Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
@@ -78,58 +71,21 @@ class _ServiceScreenState extends State<ServiceScreen> {
           ),
           child: Column(
             children: [
-              // Ligne supérieure : Logo à gauche, Profil à droite
+              // Ligne supérieure : Logo centré
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Image.asset(
                     'assets/images/logoGostudy.png', 
-                    height: 60, // Ajusté légèrement pour s'aligner joliment avec l'avatar
+                    height: 60,
                     fit: BoxFit.contain,
                   ),
-                  
-                  // Section Avatar connectée à Firestore
-                  if (userId != null)
-                    FutureBuilder<DocumentSnapshot>(
-                      future: FirebaseFirestore.instance.collection('utilisateur').doc(userId).get(),
-                      builder: (context, snapshot) {
-                        if (snapshot.connectionState == ConnectionState.waiting) {
-                          return const CircleAvatar(
-                            radius: 22,
-                            backgroundColor: Colors.white24,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                          );
-                        }
-
-                        String? photoUrl;
-                        if (snapshot.hasData && snapshot.data!.exists) {
-                          final data = snapshot.data!.data() as Map<String, dynamic>?;
-                          photoUrl = data?['photoUrl'];
-                        }
-
-                        // On applique un léger scale pour l'intégrer discrètement dans la barre supérieure
-                        return Transform.scale(
-                          scale: 0.85,
-                          child: ProfileAvatar(
-                            userId: userId,
-                            initialPhotoUrl: photoUrl,
-                          ),
-                        );
-                      },
-                    )
-                  else
-                    // Fallback visuel si l'utilisateur n'est pas détecté/connecté
-                    const CircleAvatar(
-                      radius: 22,
-                      backgroundColor: Colors.white24,
-                      child: Icon(Icons.person, color: Colors.white),
-                    ),
                 ],
               ),
               const SizedBox(height: 16),
               const Text(
                 'Proposez ou trouvez un trajet', 
-                style: TextStyle(fontSize: 16, color: Colors.white70, fontWeight: FontWeight.w500),
+                style: TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.w500),
               ),
             ],
           ),

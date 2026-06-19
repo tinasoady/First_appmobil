@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart'; // Import indispensable pour lire la base de données
+import 'package:cloud_firestore/cloud_firestore.dart'; 
+import '../widgets/profile_avatar.dart'; // Importation de ton composant d'avatar interactif
 
 class ProfilScreen extends StatefulWidget {
   const ProfilScreen({super.key});
@@ -23,6 +24,54 @@ class _ProfilScreenState extends State<ProfilScreen> {
     }
   }
 
+  // Fonction pour afficher l'alerte de confirmation de déconnexion
+  void _afficherDialogueDeconnexion(BuildContext context) {
+    showDialog(
+      context: context,
+      barrierDismissible: false, // L'utilisateur doit obligatoirement choisir une option
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, color: Colors.red),
+              SizedBox(width: 10),
+              Text('Déconnexion'),
+            ],
+          ),
+          content: const Text('Êtes-vous sûr de vouloir vous déconnecter de GoStudy ?'),
+          actions: [
+            // Bouton Annuler
+            TextButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop(); // Ferme uniquement la boîte d'alerte
+              },
+              child: const Text(
+                'Annuler',
+                style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold),
+              ),
+            ),
+            // Bouton Confirmer la déconnexion
+            TextButton(
+              onPressed: () async {
+                Navigator.of(dialogContext).pop(); // 1. Ferme l'alerte graphique
+                await FirebaseAuth.instance.signOut(); // 2. Coupe la session Firebase Auth
+                
+                if (!mounted) return;
+                if (context.mounted) {
+                  Navigator.of(context).pushReplacementNamed('/login'); // 3. Redirige vers la connexion
+                }
+              },
+              child: const Text(
+                'Se déconnecter',
+                style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
@@ -39,13 +88,14 @@ class _ProfilScreenState extends State<ProfilScreen> {
       builder: (context, snapshot) {
         String nomUtilisateur = "Chargement...";
         String numeroInscription = "Chargement...";
+        String? photoUrl;
 
         // Si la récupération réussit et que le document existe
         if (snapshot.connectionState == ConnectionState.done) {
           if (snapshot.hasData && snapshot.data!.exists) {
             final data = snapshot.data!.data() as Map<String, dynamic>;
             
-            // Extraction du Nom et Prénom (plus besoin de découper l'email !)
+            // Extraction du Nom et Prénom
             String nom = data['nom'] ?? '';
             String prenom = data['prenom'] ?? '';
             nomUtilisateur = '$nom $prenom'.trim();
@@ -53,6 +103,9 @@ class _ProfilScreenState extends State<ProfilScreen> {
 
             // Extraction du numéro d'inscription universitaire
             numeroInscription = data['iduniv'] ?? data['numinscr'] ?? 'Non renseigné';
+
+            // Extraction de l'URL de la photo depuis Firestore
+            photoUrl = data['photoUrl'];
           } else {
             // Si le document n'existe pas encore dans Firestore
             nomUtilisateur = user.displayName ?? "Utilisateur GoStudy";
@@ -60,25 +113,22 @@ class _ProfilScreenState extends State<ProfilScreen> {
           }
         }
 
+        // Si Firestore ne contient pas de photo, on utilise celle de Firebase Auth en repli
+        photoUrl ??= user.photoURL;
+
         return ListView(
           padding: const EdgeInsets.all(16.0),
           children: [
             const SizedBox(height: 40),
+            
+            // ÉLÉMENT 1 : Avatar interactif connecté à ton système d'upload
             Center(
-              child: CircleAvatar(
-                radius: 60,
-                backgroundColor: Colors.green,
-                child: CircleAvatar(
-                  radius: 58,
-                  backgroundImage: user.photoURL != null
-                      ? NetworkImage(user.photoURL!)
-                      : null,
-                  child: user.photoURL == null
-                      ? const Icon(Icons.person, size: 60, color: Colors.white)
-                      : null,
-                ),
+              child: ProfileAvatar(
+                userId: user.uid,
+                initialPhotoUrl: photoUrl,
               ),
             ),
+            
             const SizedBox(height: 20),
             Center(
               child: Text(
@@ -87,6 +137,8 @@ class _ProfilScreenState extends State<ProfilScreen> {
               ),
             ),
             const SizedBox(height: 30),
+            
+            // ÉLÉMENT 2 : Carte des informations utilisateur
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
@@ -96,7 +148,6 @@ class _ProfilScreenState extends State<ProfilScreen> {
                     _buildInfoRow(Icons.email, 'Email', user.email ?? 'N/A'),
                     const SizedBox(height: 12),
                     
-                    // Affichage du vrai Nom d'utilisateur issu de Firestore
                     _buildInfoRow(
                       Icons.account_box,
                       'Nom d\'utilisateur',
@@ -104,7 +155,6 @@ class _ProfilScreenState extends State<ProfilScreen> {
                     ),
                     const SizedBox(height: 12),
 
-                    // Affichage du numéro d'inscription universitaire issu de Firestore
                     _buildInfoRow(
                       Icons.numbers,
                       'Numéro d\'inscription',
@@ -125,15 +175,11 @@ class _ProfilScreenState extends State<ProfilScreen> {
               ),
             ),
             const SizedBox(height: 30),
+            
+            // ÉLÉMENT 3 : Bouton Déconnexion avec alerte
             Center(
               child: ElevatedButton.icon(
-                onPressed: () async {
-                  await FirebaseAuth.instance.signOut();
-                  if (!mounted) return;
-                  if (context.mounted) {
-                    Navigator.of(context).pushReplacementNamed('/login');
-                  }
-                },
+                onPressed: () => _afficherDialogueDeconnexion(context), // Déclenche le pop-up
                 icon: const Icon(Icons.logout),
                 label: const Text('Déconnexion'),
                 style: ElevatedButton.styleFrom(
@@ -152,6 +198,7 @@ class _ProfilScreenState extends State<ProfilScreen> {
     );
   }
 
+  // Widget d'aide pour générer proprement les lignes d'information
   Widget _buildInfoRow(IconData icon, String label, String value) {
     return Row(
       children: [
