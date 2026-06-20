@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart'; 
+import '../services/notification_service.dart'; // 🎯 AJOUT DE L'IMPORT
 import '../widgets/profile_avatar.dart'; // Importation de ton composant d'avatar interactif
 
 class ProfilScreen extends StatefulWidget {
@@ -54,6 +55,10 @@ class _ProfilScreenState extends State<ProfilScreen> {
             TextButton(
               onPressed: () async {
                 Navigator.of(dialogContext).pop(); // 1. Ferme l'alerte graphique
+                
+                // 🎯 COUPE L'ÉCOUTEUR DE FLUX DES NOTIFICATIONS AVANT LA DÉCONNEXION
+                NotificationService().stopListeningToRequestUpdates();
+
                 await FirebaseAuth.instance.signOut(); // 2. Coupe la session Firebase Auth
                 
                 if (!mounted) return;

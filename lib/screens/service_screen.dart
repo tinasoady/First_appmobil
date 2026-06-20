@@ -15,7 +15,6 @@ class ServiceScreen extends StatefulWidget {
 
 class _ServiceScreenState extends State<ServiceScreen> {
   final _firestoreService = FirestoreService();
-  final _notificationService = NotificationService();
   final _searchController = TextEditingController();
   String? _filterUniv;
 
@@ -58,7 +57,6 @@ class _ServiceScreenState extends State<ServiceScreen> {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        // En-tête (Header) avec uniquement le Logo de GoStudy
         Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
@@ -71,7 +69,6 @@ class _ServiceScreenState extends State<ServiceScreen> {
           ),
           child: Column(
             children: [
-              // Ligne supérieure : Logo centré
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -91,7 +88,6 @@ class _ServiceScreenState extends State<ServiceScreen> {
           ),
         ),
         
-        // Boutons d'action (Proposer / Tout afficher)
         Padding(
           padding: const EdgeInsets.all(16),
           child: Row(
@@ -122,7 +118,6 @@ class _ServiceScreenState extends State<ServiceScreen> {
           ),
         ),
         
-        // Champ de saisie pour la recherche / filtrage
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: TextFormField(
@@ -146,7 +141,6 @@ class _ServiceScreenState extends State<ServiceScreen> {
         ),
         const SizedBox(height: 16),
         
-        // Liste des trajets alimentée par Firestore et filtrée localement
         Expanded(
           child: StreamBuilder<List<Ride>>(
             stream: _firestoreService.getRidesStream(),
@@ -212,7 +206,7 @@ class _ServiceScreenState extends State<ServiceScreen> {
                     child: Padding(
                       padding: const EdgeInsets.all(16),
                       child: Column(
-                        crossAxisAlignment : CrossAxisAlignment.start,
+                        crossAxisAlignment:  CrossAxisAlignment.start,
                         children: [
                           Row(
                             children: [
@@ -265,7 +259,7 @@ class _ServiceScreenState extends State<ServiceScreen> {
                                   try {
                                     await _firestoreService.sendRideRequest(ride.id, ride.driverId);
                                     
-                                    await _notificationService.showLocalNotification(
+                                    await NotificationService().showLocalNotification(
                                       title: 'Demande envoyée ! 🚗',
                                       body: 'Votre demande pour le trajet vers ${ride.destUniv} a bien été transmise.',
                                     );

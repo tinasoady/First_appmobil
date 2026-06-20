@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../services/notification_service.dart'; // 🎯 AJOUT DE L'IMPORT
 import 'register_screen.dart';
 
 class LoginPage extends StatefulWidget {
@@ -32,6 +33,9 @@ class _LoginPageState extends State<LoginPage> {
         email: _emailController.text.trim(),
         password: _passwordController.text,
       );
+
+      // 🎯 ACTIVATION DE L'ÉCOUTEUR DE NOTIFICATIONS POUR LES MISES À JOUR
+      NotificationService().listenToRequestUpdates();
 
       if (mounted) {
         Navigator.of(context).pushReplacementNamed('/home');

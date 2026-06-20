@@ -1,15 +1,23 @@
+import 'dart:async';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
-// Gère les notifications reçues lorsque l'application est complètement fermée.
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   // Pas de print en production.
 }
 
 class NotificationService {
+  static final NotificationService _instance = NotificationService._internal();
+  factory NotificationService() => _instance;
+  NotificationService._internal();
+
   final FirebaseMessaging _firebaseMessaging = FirebaseMessaging.instance;
   final FlutterLocalNotificationsPlugin _localNotificationsPlugin =
       FlutterLocalNotificationsPlugin();
+
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _passengerRequestsSubscription;
 
   static const String channelId = 'trajets_channel';
   static const String channelName = 'Nouveaux Trajets';
@@ -17,7 +25,7 @@ class NotificationService {
       'Notifications pour les nouveaux trajets publiés';
 
   Future<void> initNotifications() async {
-    // 1) Permission FCM (iOS + Android 13+)
+    // 1) Permission FCM
     await _firebaseMessaging.requestPermission(
       alert: true,
       badge: true,
@@ -61,7 +69,7 @@ class NotificationService {
             AndroidFlutterLocalNotificationsPlugin>()
         ?.createNotificationChannel(channel);
 
-    // 5) Foreground: affiche une notif locale si un message FCM arrive
+    // 5) Foreground: notification locale si un message FCM arrive
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
       final RemoteNotification? notification = message.notification;
 
@@ -83,17 +91,61 @@ class NotificationService {
       // Router ici si nécessaire.
     });
 
-    // 7) Topic
+    // 7) Topic global
     await _firebaseMessaging.subscribeToTopic('trajets');
+    
+    // 8) Lancer automatiquement l'écoute si l'utilisateur est déjà connecté au démarrage
+    listenToRequestUpdates();
   }
 
-  // === MÉTHODE SÉPARÉE POUR LES NOTIFICATIONS LOCALES MANUELLES ===
+  // === ÉCOUTER LE RETOUR CONDUCTEUR (MÉTHODE 1) ===
+  void listenToRequestUpdates() {
+    final String? currentUserId = FirebaseAuth.instance.currentUser?.uid;
+    if (currentUserId == null) return;
+
+    _passengerRequestsSubscription?.cancel();
+
+    _passengerRequestsSubscription = FirebaseFirestore.instance
+        .collection('ride_requests')
+        .where('passengerId', isEqualTo: currentUserId)
+        .snapshots()
+        .listen((snapshot) {
+      for (var change in snapshot.docChanges) {
+        // Déclenché uniquement lors d'une MODIFICATION du document en base
+        if (change.type == DocumentChangeType.modified) {
+          final data = change.doc.data();
+          if (data == null) return;
+
+          final String status = data['status'] ?? 'pending';
+
+          if (status == 'accepted') {
+            showLocalNotification(
+              title: 'Trajet accepté ! 🎉',
+              body: 'Le conducteur a validé votre demande. Bon voyage !',
+            );
+          } else if (status == 'rejected') {
+            showLocalNotification(
+              title: 'Trajet décliné 😕',
+              body: 'Le conducteur a refusé votre demande pour ce trajet.',
+            );
+          }
+        }
+      }
+    });
+  }
+
+  void stopListeningToRequestUpdates() {
+    _passengerRequestsSubscription?.cancel();
+    _passengerRequestsSubscription = null;
+  }
+
+  // === MÉTHODE POUR AFFICHAGE LOCAL ===
   Future<void> showLocalNotification({
     required String title,
     required String body,
   }) async {
     await _localNotificationsPlugin.show(
-      DateTime.now().millisecondsSinceEpoch ~/ 1000, // ID unique
+      DateTime.now().millisecondsSinceEpoch ~/ 1000,
       title,
       body,
       NotificationDetails(

@@ -11,6 +11,7 @@ class Ride {
   final double price;
   final String status; // 'open', 'full', 'completed'
   final String? googleMapsLink;
+  final String phoneNumber; // 💡 Nouveau champ ajouté
 
   Ride({
     required this.id,
@@ -23,6 +24,7 @@ class Ride {
     required this.price,
     this.status = 'open',
     this.googleMapsLink,
+    required this.phoneNumber, // 💡 Ajouté au constructeur
   });
 
   factory Ride.fromFirestore(DocumentSnapshot doc) {
@@ -38,6 +40,7 @@ class Ride {
       price: (data['price'] ?? 0).toDouble(),
       status: data['status'] ?? 'open',
       googleMapsLink: data['googleMapsLink'],
+      phoneNumber: data['phoneNumber'] ?? '', // 💡 Récupération depuis Firestore
     );
   }
 
@@ -52,6 +55,7 @@ class Ride {
       'price': price,
       'status': status,
       'googleMapsLink': googleMapsLink,
+      'phoneNumber': phoneNumber, // 💡 Sauvegarde dans Firestore
     };
   }
 
@@ -69,4 +73,3 @@ class Ride {
     return 'https://www.google.com/maps/dir/?api=1&origin=${Uri.encodeComponent('$departurePoint $origin')}&destination=${Uri.encodeComponent(dest)}&travelmode=driving';
   }
 }
-

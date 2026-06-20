@@ -1,169 +1,154 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart'; // <-- AJOUTÉ pour récupérer l'ID de l'utilisateur connecté
+import 'package:firebase_auth/firebase_auth.dart';
 import '../models/ride.dart';
 
 class FirestoreService {
-  static final FirestoreService _instance = FirestoreService._internal();
-  factory FirestoreService() => _instance;
-  FirestoreService._internal();
-
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final String _ridesCollection = 'rides';
-  final String _requestsCollection = 'ride_requests'; // <-- AJOUTÉ : Nouvelle collection pour les demandes
 
-  // Stream all/open rides (oldest first)
+  // Noms des collections Firestore
+  final String _ridesCollection = 'rides';
+  final String _requestsCollection = 'requests';
+
+  // 1. AJOUTER UN TRAJET
+  Future<void> addRide(Ride ride) async {
+    await _firestore.collection(_ridesCollection).add(ride.toFirestore());
+  }
+
+  // 2. ÉCOUTER TOUS LES TRAJETS (Utilisé dans service_screen.dart)
   Stream<List<Ride>> getRidesStream() {
     return _firestore
         .collection(_ridesCollection)
-        .where('status', isEqualTo: 'open')
-        .orderBy('departureTime')
+        .orderBy('departureTime', descending: false)
         .snapshots()
-        .map((snapshot) => snapshot.docs.map((doc) => Ride.fromFirestore(doc)).toList());
+        .map((snapshot) => snapshot.docs
+            .map((doc) => Ride.fromFirestore(doc))
+            .toList());
   }
 
-  // Stream recent/open rides (newest first)
+  // 3. ÉCOUTER LES TRAJETS RÉCENTS (Utilisé dans home_screen.dart)
   Stream<List<Ride>> getRecentRidesStream() {
     return _firestore
         .collection(_ridesCollection)
-        .where('status', isEqualTo: 'open')
         .orderBy('departureTime', descending: true)
+        .limit(5)
         .snapshots()
-        .map((snapshot) => snapshot.docs.map((doc) => Ride.fromFirestore(doc)).toList());
+        .map((snapshot) => snapshot.docs
+            .map((doc) => Ride.fromFirestore(doc))
+            .toList());
   }
 
-  // Query rides by univ or time
-  Stream<List<Ride>> getFilteredRidesStream({
-    String? originUniv,
-    String? destUniv,
-    DateTime? afterTime,
-  }) {
-    Query query = _firestore.collection(_ridesCollection).where('status', isEqualTo: 'open');
-    
-    if (originUniv != null) query = query.where('originUniv', isEqualTo: originUniv);
-    if (destUniv != null) query = query.where('destUniv', isEqualTo: destUniv);
-    if (afterTime != null) query = query.where('departureTime', isGreaterThan: Timestamp.fromDate(afterTime));
+  // 4. ÉCOUTER LE STATUT D'UNE DEMANDE UNIQUE (Pour le bouton et le numéro de téléphone)
+  Stream<String> getRequestStatusStream(String rideId) {
+    final String? userId = FirebaseAuth.instance.currentUser?.uid;
+    if (userId == null) return Stream.value('none');
 
-    return query.orderBy('departureTime').snapshots().map(
-      (snapshot) => snapshot.docs.map((doc) => Ride.fromFirestore(doc)).toList(),
-    );
+    return _firestore
+        .collection(_requestsCollection)
+        .where('rideId', isEqualTo: rideId)
+        .where('passengerId', isEqualTo: userId)
+        .snapshots()
+        .map((snapshot) {
+          if (snapshot.docs.isEmpty) return 'none';
+          return snapshot.docs.first.data()['status'] ?? 'pending';
+        });
   }
 
-  Future<void> addRide(Ride ride) async {
-    await _firestore
-        .collection(_ridesCollection)
-        .add(ride.toFirestore());
-  }
-
-  Future<void> updateRide(String rideId, Ride ride) async {
-    await _firestore
-        .collection(_ridesCollection)
-        .doc(rideId)
-        .update(ride.toFirestore());
-  }
-
-  Future<void> deleteRide(String rideId) async {
-    await _firestore.collection(_ridesCollection).doc(rideId).delete();
-  }
-
-  // ==========================================
-  // NOUVELLE FONCTION : ENVOYER UNE DEMANDE
-  // ==========================================
+  // 5. ENVOYER UNE DEMANDE DE RÉSERVATION (Rejoindre le trajet)
   Future<void> sendRideRequest(String rideId, String driverId) async {
-    // 1. Récupérer l'ID du passager actuellement connecté
-    final String? passengerId = FirebaseAuth.instance.currentUser?.uid;
+    final String? userId = FirebaseAuth.instance.currentUser?.uid;
+    if (userId == null) return;
 
-    if (passengerId == null) {
-      throw Exception("Utilisateur non connecté. Impossible de rejoindre le trajet.");
-    }
-
-    // 2. Ajouter la demande dans la collection 'ride_requests'
     await _firestore.collection(_requestsCollection).add({
       'rideId': rideId,
-      'passengerId': passengerId,
       'driverId': driverId,
-      'status': 'pending', // Statut initial : en attente ('pending', 'accepted', 'rejected')
+      'passengerId': userId,
+      'status': 'pending',
       'timestamp': FieldValue.serverTimestamp(),
     });
   }
 
-  // Add sample demo rides if collection empty (for testing)
-  Future<void> addDemoRides() async {
-    final snapshot = await _firestore.collection(_ridesCollection).limit(1).get();
-    if (snapshot.docs.isEmpty) {
-      final demoRides = [
-        Ride(
-          id: '',
-          driverId: 'demo_user',
-          departurePoint: 'Cité Ampasy',
-          originUniv: 'ISSTM',
-          destUniv: 'Université de Mahajanga',
-          departureTime: DateTime.now().add(const Duration(hours: 2)),
-          seats: 4,
-          price: 5000,
-        ),
-        Ride(
-          id: '',
-          driverId: 'demo_user2',
-          departurePoint: 'Marche Antsiranana',
-          originUniv: 'Université de Mahajanga',
-          destUniv: 'ENI Mahajanga',
-          departureTime: DateTime.now().add(const Duration(hours: 4)),
-          seats: 3,
-          price: 3000,
-        ),
-      ];
-      for (final ride in demoRides) {
-        final rideWithLink = Ride(
-          id: ride.id,
-          driverId: ride.driverId,
-          departurePoint: ride.departurePoint,
-          originUniv: ride.originUniv,
-          destUniv: ride.destUniv,
-          departureTime: ride.departureTime,
-          seats: ride.seats,
-          price: ride.price,
-          googleMapsLink: ride.generateMapsLink(),
-        );
-        await addRide(rideWithLink);
-      }
-    }
-  }
-
-  // =========================================================================
-  // ÉCOUTER LES NOTIFICATIONS (DEMANDES REÇUES EN TANT QUE CONDUCTEUR)
-  // =========================================================================
+  // 6. ÉCOUTER LES DEMANDES REÇUES (Conducteur - Utilisé dans notification_screen.dart)
   Stream<List<Map<String, dynamic>>> getIncomingRequestsStream() {
     final String? userId = FirebaseAuth.instance.currentUser?.uid;
-    
-    if (userId == null) {
-      return Stream.value([]);
-    }
+    if (userId == null) return Stream.value([]);
 
-    // On récupère les demandes où l'utilisateur connecté est le conducteur (driverId)
     return _firestore
         .collection(_requestsCollection)
         .where('driverId', isEqualTo: userId)
-        .orderBy('timestamp', descending: true)
         .snapshots()
-        .map((snapshot) => snapshot.docs.map((doc) {
-              final data = doc.data();
-              return {
-                'id': doc.id, // On garde l'ID du document pour pouvoir l'accepter/refuser
-                ...data,
-              };
-            }).toList());
+        .map((snapshot) => snapshot.docs
+            .map((doc) => {'id': doc.id, ...doc.data()})
+            .toList());
   }
 
-  // =========================================================================
-  // ACCEPTER OU REFUSER UNE DEMANDE
-  // =========================================================================
-  Future<void> updateRequestStatus(String requestId, String newStatus) async {
+  // 7. ÉCOUTER LES DEMANDES ENVOYÉES (Passager - Utilisé dans notification_screen.dart)
+  Stream<List<Map<String, dynamic>>> getSentRequestsStream() {
+    final String? userId = FirebaseAuth.instance.currentUser?.uid;
+    if (userId == null) return Stream.value([]);
+
+    return _firestore
+        .collection(_requestsCollection)
+        .where('passengerId', isEqualTo: userId)
+        .snapshots()
+        .map((snapshot) => snapshot.docs
+            .map((doc) => {'id': doc.id, ...doc.data()})
+            .toList());
+  }
+
+  // 8. ACCEPTER UNE DEMANDE DE TRAJET (Appelée par notification_screen.dart)
+  Future<void> acceptRideRequest(String requestId, String rideId) async {
+    // Passer le statut de la requête à 'accepted'
     await _firestore
         .collection(_requestsCollection)
         .doc(requestId)
-        .update({
-      'status': newStatus, // 'accepted' ou 'rejected'
-    });
+        .update({'status': 'accepted'});
+
+    // Décrémenter automatiquement le nombre de places disponibles (-1)
+    await _firestore
+        .collection(_ridesCollection)
+        .doc(rideId)
+        .update({'seats': FieldValue.increment(-1)});
   }
 
+  // 9. REFUSER UNE DEMANDE DE TRAJET (Si utilisée par notification_screen.dart)
+  Future<void> rejectRideRequest(String requestId) async {
+    await _firestore
+        .collection(_requestsCollection)
+        .doc(requestId)
+        .update({'status': 'rejected'});
+  }
+
+  // 10. METTRE À JOUR LE STATUT D'UNE DEMANDE (Générique)
+  Future<void> updateRequestStatus(String requestId, String status) async {
+    await _firestore
+        .collection(_requestsCollection)
+        .doc(requestId)
+        .update({'status': status});
+  }
+
+  // 11. AJOUTER DES TRAJETS DE TEST (Utilisé dans service_screen.dart)
+  Future<void> addDemoRides() async {
+    final List<Map<String, dynamic>> demo = [
+      {
+        'driverId': 'demo_driver_1',
+        'departurePoint': 'Analakely',
+        'destUniv': 'Université de Mahajanga',
+        'departureTime': Timestamp.fromDate(DateTime.now().add(const Duration(days: 1))),
+        'seats': 3,
+        'phoneNumber': '0341122233',
+      },
+      {
+        'driverId': 'demo_driver_2',
+        'departurePoint': 'Sotema',
+        'destUniv': 'Université de Mahajanga',
+        'departureTime': Timestamp.fromDate(DateTime.now().add(const Duration(hours: 4))),
+        'seats': 4,
+        'phoneNumber': '0324455566',
+      }
+    ];
+
+    for (var rideData in demo) {
+      await _firestore.collection(_ridesCollection).add(rideData);
+    }
+  }
 }
